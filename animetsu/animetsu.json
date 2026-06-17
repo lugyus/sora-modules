@@ -11,7 +11,7 @@
     "streamType": "HLS",
     "quality": "1080p",
     "baseUrl": "https://animetsu.net/",
-    "searchBaseUrl": "https://animetsu.net/?s=%s",
+    "searchBaseUrl": "https://animetsu.net/search?query=%s",
     "scriptUrl": "https://raw.githubusercontent.com/lugyus/Test/refs/heads/main/animetsu/animetsu.js",
     "type": "anime",
     "downloadSupport": true,
