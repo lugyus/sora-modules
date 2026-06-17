@@ -30,12 +30,12 @@ async function searchResults(keyword) {
             `${BASE_URL}/v2/api/anime/search/?query=${encodeURIComponent(keyword)}`
         );
 
-        if (!res) return [];
+        if (!res) return JSON.stringify([]);
 
         const json = await res.json();
         const list = json.results || [];
 
-        return list.map(item => ({
+        const results = list.map(item => ({
             title:
                 item.title?.english ||
                 item.title?.romaji ||
@@ -44,8 +44,10 @@ async function searchResults(keyword) {
             image: item.cover_image?.large || "",
             href: `${BASE_URL}/anime/${item.id}`
         }));
+
+        return JSON.stringify(results); // 🔥 THIS IS THE KEY FIX
     } catch {
-        return [];
+        return JSON.stringify([]);
     }
 }
 
