@@ -3,13 +3,13 @@
   "iconUrl": "https://animetsu.net/favicon.ico",
   "author": {
     "name": "Lugyus",
-    "icon": "https://animetsu.net/favicon.ico"
+    "icon": "https://openai.com/favicon.ico"
   },
   "version": "1.0.0",
   "language": "English",
   "baseUrl": "https://animetsu.net",
-  "searchBaseUrl": "https://animetsu.net/search?keyword=",
-  "scriptUrl": "https://raw.githubusercontent.com/lugyus/Test/refs/heads/main/animetsu/animetsu.js",
+  "searchBaseUrl": "https://animetsu.net/v2/api/anime/search/?query=",
+  "scriptUrl": "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/animetsu.js",
   "type": "anime",
   "streamType": "HLS",
   "asyncJS": true,
