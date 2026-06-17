@@ -1,20 +1,27 @@
 {
-    "sourceName": "Animetsu",
-    "iconUrl": "https://animetsu.net/wp-content/uploads/2022/11/cropped-animetsu-logo-192x192.png",
-    "author": {
-        "name": "Luna Developer",
-        "icon": "https://git.luna-app.eu/ibro/services/raw/branch/main/profile.jpg",
-        "url": "https://github.com/xibrox"
-    },
-    "version": "1.0.0",
-    "language": "English",
-    "streamType": "HLS",
-    "quality": "1080p",
-    "baseUrl": "https://animetsu.net/",
-    "searchBaseUrl": "https://animetsu.net/search?query=%s",
-    "scriptUrl": "https://raw.githubusercontent.com/lugyus/Test/refs/heads/main/animetsu/animetsu.js",
-    "type": "anime",
-    "downloadSupport": true,
-    "asyncJS": true,
-    "softsub": true
+  "sourceName": "Animetsu",
+  "iconUrl": "https://animetsu.net/favicon.ico",
+  "author": {
+    "name": "Lugyus",
+    "icon": "https://animetsu.net/favicon.ico"
+  },
+  "version": "1.0.0",
+  "language": "English",
+  "baseUrl": "https://animetsu.net",
+  "searchBaseUrl": "https://animetsu.net/search?keyword=",
+  "scriptUrl": "https://raw.githubusercontent.com/username/repo/main/animetsu.js",
+  "type": "anime",
+  "streamType": "HLS",
+  "asyncJS": true,
+  "quality": "1080p",
+  "downloadSupport": true,
+  "softsub": true,
+  "supportsSora": true,
+  "supportsLuna": true,
+  "supportsDartotsu": true,
+  "supportsAnymex": true,
+  "supportsTsumi": true,
+  "supportsHiyoku": true,
+  "supportsShirox": true,
+  "supportsMojuru": true
 }
