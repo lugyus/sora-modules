@@ -9,7 +9,7 @@
   "language": "English",
   "baseUrl": "https://animetsu.live",
   "searchBaseUrl": "https://animetsu.live/search?keyword=",
-  "scriptUrl": "https://raw.githubusercontent.com/sora-modules/animetsu/main/module.js",
+  "scriptUrl": "https://raw.githubusercontent.com/sora-modules/animetsu/animetsu.js",
   "type": "anime",
   "streamType": "HLS",
   "asyncJS": true,
