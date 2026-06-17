@@ -9,7 +9,7 @@
   "language": "English",
   "baseUrl": "https://animetsu.net",
   "searchBaseUrl": "https://animetsu.net/v2/api/anime/search/?query=",
-  "scriptUrl": "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/animetsu.js",
+  "scriptUrl": "https://raw.githubusercontent.com/lugyus/Test/refs/heads/main/animetsu/animetsu.js",
   "type": "anime",
   "streamType": "HLS",
   "asyncJS": true,
