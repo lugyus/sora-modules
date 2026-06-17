@@ -12,7 +12,7 @@
     "quality": "1080p",
     "baseUrl": "https://animetsu.net/",
     "searchBaseUrl": "https://animetsu.net/?s=%s",
-    "scriptUrl": "https://git.luna-app.eu/ibro/services/raw/branch/main/animetsu/animetsu.js",
+    "scriptUrl": "https://raw.githubusercontent.com/lugyus/Test/refs/heads/main/animetsu/animetsu.js",
     "type": "anime",
     "downloadSupport": true,
     "asyncJS": true,
