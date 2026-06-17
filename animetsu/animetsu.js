@@ -5,9 +5,14 @@
  */
 async function soraFetch(url, options = { headers: {}, method: 'GET', body: null }) {
     const headers = options.headers || {};
-    if (!headers["User-Agent"]) {
-        headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-    }
+    
+    // Mimic an active modern desktop browser signature to handle basic protection layers
+    headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+    headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8";
+    headers["Accept-Language"] = "en-US,en;q=0.9";
+    headers["Cache-Control"] = "no-cache";
+    headers["Pragma"] = "no-cache";
+
     try {
         return await fetchv2(url, headers, options.method || 'GET', options.body || null);
     } catch (e) {
@@ -35,38 +40,85 @@ function fixUrl(href) {
 /** Search anime titles by keyword */
 async function searchResults(keyword) {
     try {
-        // FIXED: Reverted to the direct site endpoint
         const searchUrl = `https://animetsu.net/search?keyword=${encodeURIComponent(keyword)}`;
         const response = await soraFetch(searchUrl);
         if (!response) return JSON.stringify([]);
 
         const htmlText = await response.text();
+
+        // Anti-Bot Check Validation: If Cloudflare catches us, fail gracefully rather than locking the loop
+        if (htmlText.includes("cloudflare") || htmlText.includes("Just a moment")) {
+            return JSON.stringify([{
+                title: "Error: Cloudflare protection active. Please reload.",
+                image: "https://animetsu.net/favicon.ico",
+                href: "https://animetsu.net"
+            }]);
+        }
+
         const results = [];
 
-        // FIXED: Highly permissive decoupled RegEx pattern that matches standard structural blocks
-        const regex = /<a\s+[^>]*href="([^"]+)"[^>]*>[\s\S]*?<img\s+[^>]*src="([^"]+)"[\s\S]*?>([\s\S]*?)<\/a>/gi;
-        let match;
+        // SOLUTION: Split extraction by structural card blocks first to prevent loose tag skipping
+        // Captures standard card wrappers (like grid-items, anime-blocks, or uniform card divs)
+        const blockRegex = /<div\s+class="[^"]*(?:anime|card|item|entry|poster)[^"]*"[^>]*>([\s\S]*?)<\/div><\/div>/gi;
+        
+        // Secondary regex checklist applied inside isolated card contexts
+        const hrefRegex = /href="([^"]+)"/i;
+        const imgRegex = /src="([^"]+)"/i;
+        const fallbackTitleRegex = />([^<>\n\r]+)</;
 
-        while ((match = regex.exec(htmlText)) !== null) {
-            const rawHref = match[1];
-            const rawImg = match[2];
-            const innerContent = match[3];
+        let blockMatch;
+        while ((blockMatch = blockRegex.exec(htmlText)) !== null) {
+            const cardHtml = blockMatch[1];
 
-            // Filter out navigation or duplicate links
-            if (rawHref.includes('/search') || rawHref === '/' || rawHref.includes('javascript:')) continue;
+            const hrefCheck = hrefRegex.exec(cardHtml);
+            const imgCheck = imgRegex.exec(cardHtml);
 
-            // Extract text cleanly by removing lingering interior tags
-            const titleStr = innerContent.replace(/<[^>]*>/g, '').trim();
-            if (!titleStr) continue;
+            if (!hrefCheck) continue;
+
+            const targetHref = hrefCheck[1];
+            if (targetHref.includes('/search') || targetHref === '/' || targetHref.includes('javascript:')) continue;
+
+            // Isolate clean textual nodes to parse title safely
+            let titleText = "";
+            const titleElementMatch = /<h\d[^>]*>([\s\S]*?)<\/h\d>/i.exec(cardHtml) || 
+                                      /<span\s+class="[^"]*title[^"]*"[^>]*>([\s\S]*?)<\/span>/i.exec(cardHtml);
+
+            if (titleElementMatch) {
+                titleText = titleElementMatch[1].replace(/<[^>]*>/g, '').trim();
+            } else {
+                // Fallback catch for loose strings inside the parent blocks
+                const rawLines = cardHtml.replace(/<[^>]*>/g, '\n').split('\n');
+                for (let line of rawLines) {
+                    if (line.trim().length > 2) {
+                        titleText = line.trim();
+                        break;
+                    }
+                }
+            }
+
+            if (!titleText) continue;
 
             results.push({
-                title: titleStr,
-                image: fixUrl(rawImg),
-                href: fixUrl(rawHref)
+                title: titleText,
+                image: imgCheck ? fixUrl(imgCheck[1]) : "https://animetsu.net/favicon.ico",
+                href: fixUrl(targetHref)
             });
         }
 
-        // Limit results to avoid memory bloating in QuickJS environments
+        // UNIVERSAL BACKUP: If structural card isolation fails, try loose image link binding pairs
+        if (results.length === 0) {
+            const backupRegex = /<a\s+[^>]*href="([^"]+)"[^>]*>[\s\S]*?<img\s+[^>]*src="([^"]+)"[^>]*>[\s\S]*?<\/a>/gi;
+            let backMatch;
+            while ((backMatch = backupRegex.exec(htmlText)) !== null) {
+                if (backMatch[1].includes('/search') || backMatch[1] === '/') continue;
+                results.push({
+                    title: "Anime Match", 
+                    image: fixUrl(backMatch[2]),
+                    href: fixUrl(backMatch[1])
+                });
+            }
+        }
+
         return JSON.stringify(results.slice(0, 30));
     } catch (error) {
         return JSON.stringify([]);
@@ -83,19 +135,19 @@ async function extractDetails(url) {
 
         let description = "";
         const descMatch = /<div\s+class="[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/div>/i.exec(htmlText) ||
-                           /<p[^>]*>([\s\S]*?)<\/p>/i.exec(htmlText); // Fallback to first major paragraph block
+                          /<p[^>]*class="[^"]*(?:plot|synopsis|text)[^"]*"[^>]*>([\s\S]*?)<\/p>/i.exec(htmlText);
         if (descMatch) {
             description = descMatch[1].replace(/<[^>]*>/g, '').trim();
         }
 
         let aliases = "";
-        const aliasMatch = /<span\s+class="[^"]*synonyms[^"]*"[^>]*>([\s\S]*?)<\/span>/i.exec(htmlText);
+        const aliasMatch = /Synonyms:[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/i.exec(htmlText);
         if (aliasMatch) {
             aliases = aliasMatch[1].replace(/<[^>]*>/g, '').trim();
         }
 
         let airdate = "Unknown";
-        const airdateMatch = /<span\s+class="[^"]*aired[^"]*"[^>]*>([\s\S]*?)<\/span>/i.exec(htmlText);
+        const airdateMatch = /Aired:[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/i.exec(htmlText);
         if (airdateMatch) {
             airdate = airdateMatch[1].replace(/<[^>]*>/g, '').trim();
         }
@@ -119,14 +171,12 @@ async function extractEpisodes(url) {
         const htmlText = await response.text();
         const episodes = [];
 
-        // Captures standard structural pattern configurations for layout loops
-        const regex = /<a\s+[^>]*href="([^"]+)"[^>]*>[\s\S]*?(\d+)/gi;
+        const regex = /<a\s+[^>]*href="([^"]+)"[^>]*>[\s\S]*?(?:Episode|Ep)?\s*(\d+)/gi;
         let match;
 
         while ((match = regex.exec(htmlText)) !== null) {
             const href = match[1];
-            // Verify link points to structural watch/episode routes
-            if (href.includes('/watch/') || href.includes('/episode-')) {
+            if (href.includes('/watch/') || href.includes('-episode-') || href.includes('/ep-')) {
                 episodes.push({
                     href: fixUrl(href),
                     number: parseInt(match[2], 10)
@@ -157,7 +207,7 @@ async function extractStreamUrl(url) {
 
         if (match) {
             streamDetails.streams.push({
-                title: "Animetsu Video Stream",
+                title: "Animetsu HLS Stream",
                 streamUrl: match[1],
                 headers: {
                     "Referer": "https://animetsu.net/",
@@ -170,7 +220,7 @@ async function extractStreamUrl(url) {
         const iframeMatch = iframeRegex.exec(htmlText);
         if (iframeMatch && streamDetails.streams.length === 0) {
             streamDetails.streams.push({
-                title: "Mirror Source",
+                title: "Mirror Stream Player",
                 streamUrl: fixUrl(iframeMatch[1]),
                 headers: { "Referer": "https://animetsu.net/" }
             });
