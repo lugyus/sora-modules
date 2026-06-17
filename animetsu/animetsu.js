@@ -1,26 +1,32 @@
 /**
  * ============================================================================
- * SORA/LUNA NATIVE NETWORK BRIDGE BOILERPLATE
+ * ENHANCED NETWORK ENGINE (Handles advanced headers)
  * ============================================================================
  */
 async function soraFetch(url, options = { headers: {}, method: 'GET', body: null }) {
     const headers = options.headers || {};
     
-    // Mimic an active modern desktop browser signature to handle basic protection layers
+    // Total browser spoofing matrix
     headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
     headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8";
     headers["Accept-Language"] = "en-US,en;q=0.9";
     headers["Cache-Control"] = "no-cache";
-    headers["Pragma"] = "no-cache";
+    headers["Connection"] = "keep-alive";
+    headers["Upgrade-Insecure-Requests"] = "1";
+    headers["Sec-Fetch-Dest"] = "document";
+    headers["Sec-Fetch-Mode"] = "navigate";
+    headers["Sec-Fetch-Site"] = "none";
+    headers["Sec-Fetch-User"] = "?1";
 
     try {
-        return await fetchv2(url, headers, options.method || 'GET', options.body || null);
-    } catch (e) {
-        try { 
-            return await fetch(url, options); 
-        } catch (error) { 
-            return null; 
-        }
+        const res = await fetchv2(url, headers, options.method || 'GET', options.body || null);
+        if (res) return res;
+    } catch (e) {}
+    
+    try { 
+        return await fetch(url, options); 
+    } catch (error) { 
+        return null; 
     }
 }
 
@@ -33,23 +39,24 @@ function fixUrl(href) {
 
 /**
  * ============================================================================
- * CORE IMPLEMENTATION (Global Scope)
+ * CORE IMPLEMENTATION
  * ============================================================================
  */
 
-/** Search anime titles by keyword */
 async function searchResults(keyword) {
     try {
         const searchUrl = `https://animetsu.net/search?keyword=${encodeURIComponent(keyword)}`;
         const response = await soraFetch(searchUrl);
-        if (!response) return JSON.stringify([]);
+        if (!response) {
+            return JSON.stringify([{ title: "Network connection refused", image: "", href: "" }]);
+        }
 
         const htmlText = await response.text();
 
-        // Anti-Bot Check Validation: If Cloudflare catches us, fail gracefully rather than locking the loop
-        if (htmlText.includes("cloudflare") || htmlText.includes("Just a moment")) {
+        // 1. Direct Cloudflare Validation
+        if (htmlText.includes("cloudflare") || htmlText.includes("Just a moment") || htmlText.length < 200) {
             return JSON.stringify([{
-                title: "Error: Cloudflare protection active. Please reload.",
+                title: "Cloudflare Security Blocked Request",
                 image: "https://animetsu.net/favicon.ico",
                 href: "https://animetsu.net"
             }]);
@@ -57,176 +64,139 @@ async function searchResults(keyword) {
 
         const results = [];
 
-        // SOLUTION: Split extraction by structural card blocks first to prevent loose tag skipping
-        // Captures standard card wrappers (like grid-items, anime-blocks, or uniform card divs)
-        const blockRegex = /<div\s+class="[^"]*(?:anime|card|item|entry|poster)[^"]*"[^>]*>([\s\S]*?)<\/div><\/div>/gi;
-        
-        // Secondary regex checklist applied inside isolated card contexts
-        const hrefRegex = /href="([^"]+)"/i;
-        const imgRegex = /src="([^"]+)"/i;
-        const fallbackTitleRegex = />([^<>\n\r]+)</;
+        // 2. AGGRESIVE FLOATING EXTRACTOR (Ignores element layouts completely)
+        // This looks for ANY anchor tag wrapping or adjacent to an image source.
+        const looseRegex = /<a\s+[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+        const imgSrcRegex = /src="([^"]+)"/i;
+        const titleAttrRegex = /title="([^"]+)"/i;
 
-        let blockMatch;
-        while ((blockMatch = blockRegex.exec(htmlText)) !== null) {
-            const cardHtml = blockMatch[1];
+        let match;
+        while ((match = looseRegex.exec(htmlText)) !== null) {
+            const href = match[1];
+            const innerHtml = match[2];
 
-            const hrefCheck = hrefRegex.exec(cardHtml);
-            const imgCheck = imgRegex.exec(cardHtml);
+            // Filter out system links
+            if (href.includes('/search') || href === '/' || href.includes('javascript:')) continue;
 
-            if (!hrefCheck) continue;
+            // Check if this anchor node contains an image asset
+            const imgMatch = imgSrcRegex.exec(innerHtml);
+            if (!imgMatch) continue;
 
-            const targetHref = hrefCheck[1];
-            if (targetHref.includes('/search') || targetHref === '/' || targetHref.includes('javascript:')) continue;
-
-            // Isolate clean textual nodes to parse title safely
-            let titleText = "";
-            const titleElementMatch = /<h\d[^>]*>([\s\S]*?)<\/h\d>/i.exec(cardHtml) || 
-                                      /<span\s+class="[^"]*title[^"]*"[^>]*>([\s\S]*?)<\/span>/i.exec(cardHtml);
-
-            if (titleElementMatch) {
-                titleText = titleElementMatch[1].replace(/<[^>]*>/g, '').trim();
+            let title = "";
+            // Look for clean titles inside the image tag properties or header text
+            const titleAttr = titleAttrRegex.exec(innerHtml) || titleAttrRegex.exec(match[0]);
+            
+            if (titleAttr) {
+                title = titleAttr[1].trim();
             } else {
-                // Fallback catch for loose strings inside the parent blocks
-                const rawLines = cardHtml.replace(/<[^>]*>/g, '\n').split('\n');
-                for (let line of rawLines) {
-                    if (line.trim().length > 2) {
-                        titleText = line.trim();
-                        break;
-                    }
+                // Strip structural tags out to see if text nodes exist
+                const textStrip = innerHtml.replace(/<[^>]*>/g, '').trim();
+                if (textStrip.length > 1) {
+                    title = textStrip;
                 }
             }
 
-            if (!titleText) continue;
+            if (!title) title = "Anime Content";
 
             results.push({
-                title: titleText,
-                image: imgCheck ? fixUrl(imgCheck[1]) : "https://animetsu.net/favicon.ico",
-                href: fixUrl(targetHref)
+                title: title,
+                image: fixUrl(imgMatch[1]),
+                href: fixUrl(href)
             });
         }
 
-        // UNIVERSAL BACKUP: If structural card isolation fails, try loose image link binding pairs
+        // 3. ULTRA FALLBACK (Flat token pairing)
         if (results.length === 0) {
-            const backupRegex = /<a\s+[^>]*href="([^"]+)"[^>]*>[\s\S]*?<img\s+[^>]*src="([^"]+)"[^>]*>[\s\S]*?<\/a>/gi;
-            let backMatch;
-            while ((backMatch = backupRegex.exec(htmlText)) !== null) {
-                if (backMatch[1].includes('/search') || backMatch[1] === '/') continue;
-                results.push({
-                    title: "Anime Match", 
-                    image: fixUrl(backMatch[2]),
-                    href: fixUrl(backMatch[1])
-                });
+            const allLinks = [];
+            const linkExtract = /href="([^"]+)"/gi;
+            let lMatch;
+            while((lMatch = linkExtract.exec(htmlText)) !== null) {
+                if(!lMatch[1].includes('/search') && lMatch[1].length > 1) {
+                    allLinks.push(fixUrl(lMatch[1]));
+                }
+            }
+            
+            if(allLinks.length > 0) {
+                return JSON.stringify(allLinks.slice(0, 10).map((link, idx) => ({
+                    title: `Discovered Link Match #${idx + 1}`,
+                    image: "https://animetsu.net/favicon.ico",
+                    href: link
+                })));
             }
         }
 
-        return JSON.stringify(results.slice(0, 30));
+        return JSON.stringify(results.slice(0, 24));
     } catch (error) {
-        return JSON.stringify([]);
+        return JSON.stringify([{ title: "Parsing failed internally", image: "", href: "" }]);
     }
 }
 
-/** Extract metadata details of a given anime */
 async function extractDetails(url) {
     try {
         const response = await soraFetch(url);
-        if (!response) return JSON.stringify([{ description: "", aliases: "", airdate: "" }]);
+        if (!response) return JSON.stringify([{ description: "Failed to load source", aliases: "", airdate: "" }]);
 
         const htmlText = await response.text();
+        let description = "No summary available.";
 
-        let description = "";
-        const descMatch = /<div\s+class="[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/div>/i.exec(htmlText) ||
-                          /<p[^>]*class="[^"]*(?:plot|synopsis|text)[^"]*"[^>]*>([\s\S]*?)<\/p>/i.exec(htmlText);
-        if (descMatch) {
-            description = descMatch[1].replace(/<[^>]*>/g, '').trim();
-        }
-
-        let aliases = "";
-        const aliasMatch = /Synonyms:[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/i.exec(htmlText);
-        if (aliasMatch) {
-            aliases = aliasMatch[1].replace(/<[^>]*>/g, '').trim();
-        }
-
-        let airdate = "Unknown";
-        const airdateMatch = /Aired:[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/i.exec(htmlText);
-        if (airdateMatch) {
-            airdate = airdateMatch[1].replace(/<[^>]*>/g, '').trim();
-        }
-
+        const descMatch = htmlText.replace(/<[^>]*>/g, ' ').substring(0, 500);
+        
         return JSON.stringify([{
-            description: description,
-            aliases: aliases,
-            airdate: airdate
+            description: descMatch.trim() + "...",
+            aliases: "N/A",
+            airdate: "N/A"
         }]);
     } catch (error) {
-        return JSON.stringify([{ description: "", aliases: "", airdate: "" }]);
+        return JSON.stringify([{ description: "Error pulling data context", aliases: "", airdate: "" }]);
     }
 }
 
-/** Extract episodes for a given anime */
 async function extractEpisodes(url) {
     try {
         const response = await soraFetch(url);
         if (!response) return JSON.stringify([]);
-
         const htmlText = await response.text();
+        
         const episodes = [];
-
-        const regex = /<a\s+[^>]*href="([^"]+)"[^>]*>[\s\S]*?(?:Episode|Ep)?\s*(\d+)/gi;
+        const regex = /href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
         let match;
 
         while ((match = regex.exec(htmlText)) !== null) {
             const href = match[1];
-            if (href.includes('/watch/') || href.includes('-episode-') || href.includes('/ep-')) {
+            const text = match[2].replace(/<[^>]*>/g, '');
+            if (href.includes('/watch/') || href.includes('-episode-') || /\b(\d+)\b/.test(text)) {
+                const numMatch = /\b(\d+)\b/.exec(text);
                 episodes.push({
                     href: fixUrl(href),
-                    number: parseInt(match[2], 10)
+                    number: numMatch ? parseInt(numMatch[1], 10) : 1
                 });
             }
         }
-
-        const uniqueEpisodes = Array.from(new Map(episodes.map(item => [item.number, item])).values());
-        uniqueEpisodes.sort((a, b) => a.number - b.number);
-
-        return JSON.stringify(uniqueEpisodes);
+        return JSON.stringify(episodes.slice(0, 100));
     } catch (error) {
         return JSON.stringify([]);
     }
 }
 
-/** Extract streaming options and subtitles */
 async function extractStreamUrl(url) {
     try {
         const response = await soraFetch(url);
         if (!response) return JSON.stringify({ streams: [] });
-
         const htmlText = await response.text();
-        const streamDetails = { streams: [], subtitles: "" };
-
-        const streamRegex = /(?:file|src|url)\s*:\s*"([^"]+\.m3u8[^"]*)"/i;
-        const match = streamRegex.exec(htmlText);
-
-        if (match) {
-            streamDetails.streams.push({
-                title: "Animetsu HLS Stream",
-                streamUrl: match[1],
-                headers: {
-                    "Referer": "https://animetsu.net/",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-                }
-            });
-        }
 
         const iframeRegex = /<iframe\s+[^>]*src="([^"]+)"/i;
         const iframeMatch = iframeRegex.exec(htmlText);
-        if (iframeMatch && streamDetails.streams.length === 0) {
-            streamDetails.streams.push({
-                title: "Mirror Stream Player",
-                streamUrl: fixUrl(iframeMatch[1]),
-                headers: { "Referer": "https://animetsu.net/" }
+        
+        if (iframeMatch) {
+            return JSON.stringify({
+                streams: [{
+                    title: "Default Mirror Source",
+                    streamUrl: fixUrl(iframeMatch[1]),
+                    headers: { "Referer": "https://animetsu.net/" }
+                }]
             });
         }
-
-        return JSON.stringify(streamDetails);
+        return JSON.stringify({ streams: [] });
     } catch (error) {
         return JSON.stringify({ streams: [] });
     }
